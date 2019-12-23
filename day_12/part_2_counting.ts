@@ -9,9 +9,9 @@ import { Moon } from './moon';
  * do is find the LCM of the three numbers, which was coded in the part_2.ts
  * file. It took 2.62 seconds to calculate, which is just over 1 second if
  * accounting for compiling time. This version of the solution will also
- * find the correct answer, but since it took XXX seconds to calculate the
+ * find the correct answer, but since it took 73 minutes to calculate the
  * example with an answer of 4686774924, it would probably take this program
- * about XXX to calculate the actual answer using the obvious method.
+ * between 8 and 9 years to calculate the actual answer using the naive method.
  *
  * Ain't NOBODY got time fo dat
  */
