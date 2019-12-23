@@ -1,9 +1,11 @@
 import { channel, take, put } from '@paybase/csp';
 import { min, max, reverse } from 'lodash';
 import BugBot, { Color, HullMap } from './bug';
-import IntcodeCPU from '../tools/intcode_cpu_complete';
+import IntcodeCPU from '../tools/intcode_cpu_csp';
 
 import { final } from './program';
+
+const TIMEOUT = 10;
 
 const main = async (program: number[]) => {
   const inputChan = channel<number>();
@@ -42,7 +44,15 @@ const main = async (program: number[]) => {
   while (true) {
     // First, pass the bug's camera data to the computer
     const color = bug.getColor();
-    await put(inputChan, color);
+
+    const received = await Promise.race([
+      put(inputChan, color),
+      timeout()
+    ]);
+
+    if (received === null) {
+      break;
+    }
 
     // Then, get the paint color (or finish)
     // If finished channel outputs first, done = 1
@@ -53,11 +63,6 @@ const main = async (program: number[]) => {
     dirVal === 0 ? bug.turnCounterClockwise() : bug.turnClockwise();
     bug.moveForward();
   }
-  // If this is unreachable, why does it halt???
-
-  console.log('This still a thing?');
-  // console.log(bug.getHull());
-  return bug;
 };
 
 const paintHull = (hull: HullMap) => {
@@ -82,6 +87,13 @@ const paintHull = (hull: HullMap) => {
     console.log(row.map(c => c === 0 ? '..' : '##').join(''));
   }
 };
+
+const timeout = () => new Promise<null>(resolve => {
+  const wait = setTimeout(() => {
+    clearTimeout(wait);
+    resolve(null);
+  }, TIMEOUT);
+});
 
 (async () => {
   try {

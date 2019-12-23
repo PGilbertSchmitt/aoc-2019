@@ -1,4 +1,6 @@
-// Complete version of Intcode Computer
+/**
+ * Complete version of Intcode spec, using passed
+ */
 
 import { reverse, padStart, isNil } from 'lodash';
 import { questionInt } from 'readline-sync';
@@ -81,7 +83,7 @@ class IntcodeCPU {
   public async exec() {
     if (this.ip !== 0) {
       console.log('CPU must be reloaded before running');
-      // return 0;
+      return 0;
     }
 
     let op = this.getCode();
@@ -91,7 +93,7 @@ class IntcodeCPU {
       op = this.getCode();
     }
 
-    this.finishedCB(1);
+    this.finishedCB(this.code[0]);
     return;
   }
 
@@ -107,7 +109,7 @@ class IntcodeCPU {
         await this.opGetInput(op.modes);
         break;
       case Ops.SEND_OUTPUT:
-        await this.opSendOutput(op.modes);
+        this.opSendOutput(op.modes);
         break;
       case Ops.JUMP_IF_TRUE:
         this.opJump(true, op.modes);
@@ -176,11 +178,12 @@ class IntcodeCPU {
   }
 
   // Outputs
-  private async opSendOutput([aMode]: Mode[]) {
+  private opSendOutput([aMode]: Mode[]) {
     const codeIp = this.ip;
     const [a] = this.retrieveOperands(1);
     const value = this.toVal(a, aMode);
-    await this.outputCB(value);
+    // May be async, but the return is void so no reason to pause
+    this.outputCB(value);
   }
 
   private opJump(isTrue: boolean, [aMode, bMode]: Mode[]) {

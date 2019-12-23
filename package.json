@@ -6,6 +6,7 @@
   "dependencies": {
     "@paybase/csp": "^1.0.7",
     "@types/lodash": "^4.14.149",
+    "@types/node": "^12.12.21",
     "@types/readline-sync": "^1.4.3",
     "lodash": "^4.17.15",
     "readline-sync": "^1.4.10",
