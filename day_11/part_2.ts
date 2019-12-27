@@ -39,7 +39,7 @@ const main = async (program: number[]) => {
   const bug = new BugBot(Color.WHITE);
 
   console.log('Starting crawl');
-  cpu.exec().then(() => console.log(paintHull(bug.getHull())));
+  cpu.exec();
 
   while (true) {
     // First, pass the bug's camera data to the computer
@@ -63,6 +63,11 @@ const main = async (program: number[]) => {
     dirVal === 0 ? bug.turnCounterClockwise() : bug.turnClockwise();
     bug.moveForward();
   }
+
+  await take(doneChan);
+  paintHull(bug.getHull());
+  console.log('Hull painted!');
+  return;
 };
 
 const paintHull = (hull: HullMap) => {
@@ -99,6 +104,7 @@ const timeout = () => new Promise<null>(resolve => {
   try {
     console.log('Booting');
     await main(final);
+    console.log('We done!');
   } catch (e) {
     console.log('Ugh');
   }

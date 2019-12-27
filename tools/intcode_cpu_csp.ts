@@ -5,9 +5,13 @@
 import { reverse, padStart, isNil } from 'lodash';
 import { questionInt } from 'readline-sync';
 
+import { timeoutWrapper } from './timeout_wrapper';
+
 const NOUN_INDEX = 1;
 const VERB_INDEX = 2;
 const MAX_OPERANDS = 3;
+
+const TIMEOUT = 1000;
 
 enum Ops {
   ADD = 1,
@@ -33,8 +37,8 @@ interface Operator {
   modes: number[];
 }
 
-type InputCallback = () => Promise<number>;
-type OutputCallback = (output: number) => Promise<void>;
+export type InputCallback = () => Promise<number>;
+export type OutputCallback = (output: number) => Promise<void | null>;
 
 const defaultInput = async () => {
   return questionInt('> ');
@@ -44,10 +48,11 @@ const defaultOutput = async (out: number) => {
   console.log(out);
 };
 
-interface ICPUOptions {
+export interface ICPUOptions {
   inputCB?: InputCallback;
   outputCB?: OutputCallback;
   finishedCB?: OutputCallback;
+  inputTimeout?: number;
 }
 
 class IntcodeCPU {
@@ -61,22 +66,30 @@ class IntcodeCPU {
 
   constructor(
     program: number[],
-    opts: ICPUOptions
+    opts?: ICPUOptions
   ) {
     this.program = program;
-    this.inputCB = opts.inputCB || defaultInput;
-    this.outputCB = opts.outputCB || defaultOutput;
-    this.finishedCB = opts.finishedCB || defaultOutput;
+    if (opts?.inputTimeout || 0 < 0) {
+      this.inputCB = opts?.inputCB || defaultInput;
+    } else {
+      this.inputCB = timeoutWrapper(
+        opts?.inputCB || defaultInput,
+        opts?.inputTimeout || TIMEOUT
+      );
+    }
+    this.outputCB = opts?.outputCB || defaultOutput;
+    this.finishedCB = opts?.finishedCB || defaultOutput;
   }
 
-  public load(noun?: number, verb?: number) {
+  public load(overrides?: Array<[number, number]>) {
     this.ip = 0;
     this.relBase = 0;
     this.code = [...this.program];
 
-    if (noun && verb) {
-      this.code[NOUN_INDEX] = noun;
-      this.code[VERB_INDEX] = verb;
+    if (overrides && overrides.length > 0) {
+      for (const [addr, val] of overrides) {
+        this.code[addr] = val;
+      }
     }
   }
 
@@ -174,6 +187,9 @@ class IntcodeCPU {
     const codeIp = this.ip;
     const [a] = this.retrieveOperands(1);
     const input = await this.inputCB();
+    if (input === null) {
+      throw new Error('Waited for input for too long');
+    }
     this.write(a, aMode, input);
   }
 
@@ -279,5 +295,42 @@ class IntcodeCPU {
     }
   }
 }
+
+// type NullableTimeout = NodeJS.Timeout | null;
+
+// const awaitWithTimeout = (): [Promise<null>, () => void] => {
+//   let wait: NullableTimeout = null;
+
+//   const timeout = new Promise<null>(resolve => {
+//     wait = setTimeout(() => {
+//       clearTimeout(wait as NodeJS.Timeout);
+//       resolve(null);
+//     }, TIMEOUT);
+//   });
+
+//   const cancel = () => clearTimeout(wait as NodeJS.Timeout);
+
+//   return [timeout, cancel];
+// };
+
+// type anyFunc = (...args: any[]) => any;
+
+// const inputWithTimeout = (cb: InputCallback): InputCallback => {
+//   const [timeout, cancel] = awaitWithTimeout();
+
+//   return async () => {
+//     const output = await Promise.race([
+//       cb(),
+//       timeout
+//     ]);
+
+//     if (output !== null) {
+//       cancel();
+//       return output;
+//     }
+
+//     throw new Error('Waited too long for input');
+//   };
+// };
 
 export default IntcodeCPU;
