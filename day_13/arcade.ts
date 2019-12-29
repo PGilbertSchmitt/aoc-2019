@@ -1,7 +1,6 @@
 import { Channel, channel, put, take } from '@paybase/csp';
 import { keyIn } from 'readline-sync';
 import IntcodeCPU from '../tools/intcode_cpu_csp';
-import { timeoutWrapper } from '../tools/timeout_wrapper';
 import { gameData } from './game_file';
 
 export enum Tile {
