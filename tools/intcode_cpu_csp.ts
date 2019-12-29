@@ -7,8 +7,6 @@ import { questionInt } from 'readline-sync';
 
 import { timeoutWrapper } from './timeout_wrapper';
 
-const NOUN_INDEX = 1;
-const VERB_INDEX = 2;
 const MAX_OPERANDS = 3;
 
 const TIMEOUT = 1000;
