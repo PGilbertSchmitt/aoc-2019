@@ -35,7 +35,7 @@ interface Operator {
   modes: number[];
 }
 
-export type InputCallback = () => Promise<number>;
+export type InputCallback = () => Promise<number | 'kill'>;
 export type OutputCallback = (output: number) => Promise<void | null>;
 
 const defaultInput = async () => {
@@ -188,12 +188,14 @@ class IntcodeCPU {
     if (input === null) {
       throw new Error('Waited for input for too long');
     }
+    if (input === 'kill') {
+      throw new Error('Received kill signal');
+    }
     this.write(a, aMode, input);
   }
 
   // Outputs
   private opSendOutput([aMode]: Mode[]) {
-    const codeIp = this.ip;
     const [a] = this.retrieveOperands(1);
     const value = this.toVal(a, aMode);
     // May be async, but the return is void so no reason to pause
