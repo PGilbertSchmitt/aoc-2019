@@ -19,10 +19,10 @@ export class Vector2 {
   public neighbors() {
     const [x, y] = [this.x, this.y];
     return [
-      new Vector2(x, y + 1),
-      new Vector2(x + 1, y),
-      new Vector2(x, y - 1),
-      new Vector2(x - 1, y),
+      new Vector2(x, y + 1), // North
+      new Vector2(x + 1, y), // East
+      new Vector2(x, y - 1), // South
+      new Vector2(x - 1, y), // West
     ];
   }
 

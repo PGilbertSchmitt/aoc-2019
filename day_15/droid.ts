@@ -3,48 +3,34 @@ import { keyIn } from 'readline-sync';
 import { reverse } from 'lodash';
 import IntcodeCPU from '../tools/intcode_cpu_csp';
 import { Vector2 } from '../tools/vectors';
-
+import Tilemap, { Tile, Dir } from './tilemap';
 import { program } from './program';
-
-enum Status {
-  WALL = 0,
-  EMPTY = 1,
-  OXYGEN = 2,
-  UNKNOWN = 3,
-  DROID_N = 4,
-  DROID_S = 5,
-  DROID_W = 6,
-  DROID_E = 7,
-}
-
-enum Dir {
-  NORTH = 1,
-  SOUTH = 2,
-  WEST = 3,
-  EAST = 4,
-}
 
 class Droid {
   private brain: IntcodeCPU;
-  private statusQueue: Channel<Status>;
+  private tileQueue: Channel<Tile>;
   private location: Vector2;
   private lastDirection: Dir;
   private minCoor: Vector2;
   private maxCoor: Vector2;
-  private shipMap: Map<string, Status>;
+  private shipMap: Tilemap;
+  private auto: boolean;
+  private moveQueue: Dir[];
 
-  constructor() {
-    this.statusQueue = channel();
+  constructor(auto = false) {
+    this.tileQueue = channel();
     this.location = new Vector2();
     this.minCoor = new Vector2();
     this.maxCoor = new Vector2();
-    this.shipMap = new Map();
+    this.shipMap = new Tilemap();
     this.lastDirection = Dir.NORTH;
+    this.auto = auto;
+    this.moveQueue = [];
 
     this.brain = new IntcodeCPU(program, {
       inputTimeout: -1,
       inputCB: this.getInput,
-      outputCB: (status: Status) => put(this.statusQueue, status)
+      outputCB: (tile: Tile) => put(this.tileQueue, tile)
     });
   }
 
@@ -53,23 +39,28 @@ class Droid {
     let done = false;
     this.brain.exec().catch(e => {
       // CPU can stop loudly
-      console.log(e);
+      // console.log(e);
+      this.printMap();
       console.log('Goodbye!');
       done = true;
+      const pathToOrigin = this.shipMap.pathToNode(Tile.OXYGEN, new Vector2());
+      console.log(`The droid must travel ${pathToOrigin?.length} tiles to get to the oxygen`);
+
+      this.shipMap.calcOxygenTime();
     });
 
     while (!done) {
-      const status = await take(this.statusQueue);
-      this.handleMove(status);
+      const tile = await take(this.tileQueue);
+      this.handleMove(tile);
     }
   }
 
   private getInput = async () => {
     // Print map here
-    this.printMap();
+    // this.printMap();
 
-    const key = this.getUserInput();
-    const dir = this.keyToDir(key);
+    // await new Promise(res => setTimeout(res, 500));
+    const dir = this.auto ? this.getAutoInput() : this.getUserInput();
 
     if (dir === null) {
       return 'kill';
@@ -80,9 +71,21 @@ class Droid {
   }
 
   private getUserInput = () => {
-    return keyIn('> ', {
+    const key = keyIn('> ', {
       limit: 'wasdk'
     });
+    return this.keyToDir(key);
+  }
+
+  private getAutoInput = () => {
+    if (this.moveQueue.length === 0) {
+      const newPath = this.shipMap.pathToNode(Tile.UNKNOWN, this.location);
+      if (newPath === null) {
+        throw new Error('Not sure where to go');
+      }
+      this.moveQueue = newPath;
+    }
+    return this.moveQueue.shift() as Dir;
   }
 
   private keyToDir = (key: string) => {
@@ -100,18 +103,18 @@ class Droid {
     }
   }
 
-  private handleMove = (status: Status) => {
+  private handleMove = (tile: Tile) => {
     const learnedPosition = this.facedPosition();
     this.updateBounds(learnedPosition);
 
-    if (status !== Status.WALL) {
+    if (tile !== Tile.WALL) {
       this.location = learnedPosition;
-      console.log('EMPTY');
+      // console.log('EMPTY');
     } else {
-      console.log('HIT WALL');
+      // console.log('HIT WALL');
     }
 
-    this.shipMap.set(learnedPosition.toString(), status);
+    this.shipMap.set(learnedPosition, tile);
   }
 
   private facedPosition = () => {
@@ -159,60 +162,58 @@ class Droid {
       this.minCoor.y,
       this.maxCoor.y,
     ];
-    console.log([xMin, xMax, yMin, yMax]);
-    const blankRow = Array.from(new Array(xMax - xMin + 1)).map(() => Status.UNKNOWN);
+    // console.log([xMin, xMax, yMin, yMax]);
+    const blankRow = Array.from(new Array(xMax - xMin + 1)).map(() => Tile.UNKNOWN);
     const grid = Array.from(new Array(yMax - yMin + 1)).map(() => [...blankRow]);
     // console.log(grid);
 
-    const mapPoints = this.shipMap.entries();
-    let curPoint = mapPoints.next();
-    while (!curPoint.done) {
-      const point = Vector2.fromString(curPoint.value[0]);
-      grid[point.y - yMin][point.x - xMin] = curPoint.value[1];
-      curPoint = mapPoints.next();
-    }
-    grid[this.location.y - yMin][this.location.x - xMin] = this.dirToStatus(this.lastDirection);
+    this.shipMap.entries().forEach(([ point, tile ]) => {
+      grid[point.y - yMin][point.x - xMin] = tile;
+    });
+    // Overwrite the current location of the droid
+    grid[this.location.y - yMin][this.location.x - xMin] = this.dirToTile(this.lastDirection);
 
-    const boxRow = `@${blankRow.map(() => '-').join('')}@`;
+    const boxRow = `@@${blankRow.map(() => '~~').join('')}@@`;
+    console.log(boxRow);
     console.log(boxRow);
     reverse(grid).forEach(row => {
-      console.log(`|${row.map(stat => this.mapStatusToChar(stat)).join('')}|`);
+      console.log(`||${row.map(stat => this.mapTileToChar(stat)).join('')}||`);
     });
     console.log(boxRow);
-
+    console.log(boxRow);
   }
 
-  private mapStatusToChar = (status: Status) => {
-    switch (status) {
-      case Status.UNKNOWN:
-        return ' ';
-      case Status.EMPTY:
-        return '.';
-      case Status.WALL:
-        return '#';
-      case Status.OXYGEN:
-        return 'O';
-      case Status.DROID_N:
-        return '^';
-      case Status.DROID_S:
-        return 'V';
-      case Status.DROID_W:
-        return '<';
-      case Status.DROID_E:
-        return '>';
+  private mapTileToChar = (tile: Tile) => {
+    switch (tile) {
+      case Tile.UNKNOWN:
+        return '  ';
+      case Tile.EMPTY:
+        return '--';
+      case Tile.WALL:
+        return '##';
+      case Tile.OXYGEN:
+        return '><';
+      case Tile.DROID_N:
+        return '^^';
+      case Tile.DROID_S:
+        return 'vv';
+      case Tile.DROID_W:
+        return '<<';
+      case Tile.DROID_E:
+        return '>>';
     }
   }
 
-  private dirToStatus = (dir: Dir) => {
+  private dirToTile = (dir: Dir) => {
     switch (dir) {
       case Dir.NORTH:
-        return Status.DROID_N;
+        return Tile.DROID_N;
       case Dir.SOUTH:
-        return Status.DROID_S;
+        return Tile.DROID_S;
       case Dir.WEST:
-        return Status.DROID_W;
+        return Tile.DROID_W;
       case Dir.EAST:
-        return Status.DROID_E;
+        return Tile.DROID_E;
     }
   }
 }
